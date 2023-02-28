@@ -269,6 +269,7 @@ def main(args):
         n_epochs=2,
         target_kl=0.05,
         gamma=0.99,
+        device="cuda",
         tensorboard_log=osp.join(args.log_path),
     )
     if args.eval:
