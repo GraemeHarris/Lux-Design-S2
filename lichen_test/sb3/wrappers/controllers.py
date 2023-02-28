@@ -123,7 +123,7 @@ class SimpleUnitDiscreteController(Controller):
         return self.no_op_dim_high < id and id < self.factory_dim_high
 
     def _get_factory_action(self, id):
-        return id - self.factory_dim_high
+        return id - self.no_op_dim_high
 
     def action_to_lux_action(
         self, agent: str, obs: Dict[str, Any], action: npt.NDArray
@@ -144,8 +144,6 @@ class SimpleUnitDiscreteController(Controller):
                 action_queue = [self._get_pickup_action(choice)]
             elif self._is_dig_action(choice):
                 action_queue = [self._get_dig_action(choice)]
-            elif self._is_factory_action(choice):
-                action_queue = [self._get_factory_action(choice)]
             else:
                 # action is a no_op, so we don't update the action queue
                 no_op = True
@@ -162,8 +160,13 @@ class SimpleUnitDiscreteController(Controller):
             break
 
         factories = shared_obs["factories"][agent]
-        if len(units) == 0:
-            for unit_id in factories.keys():
+
+        for unit_id in factories.keys():
+            if self._is_factory_action(action):
+                # print(f"DEBUG: {action}, {self._get_factory_action(action)}")
+                lux_action[unit_id] = self._get_factory_action(action)
+
+            if len(units) == 0:
                 lux_action[unit_id] = 1  # build a single heavy
 
         return lux_action
