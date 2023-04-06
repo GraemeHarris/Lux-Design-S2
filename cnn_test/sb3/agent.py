@@ -12,12 +12,17 @@ import numpy as np
 import torch as th
 from stable_baselines3.ppo import PPO
 from lux.config import EnvConfig
-from wrappers import SimpleUnitDiscreteController, SimpleUnitObservationWrapper
+from wrappers import (
+    SimpleUnitDiscreteController,
+    SimpleUnitObservationWrapper,
+    SimpleMutiDimObsSpace,
+)
 
 # change this to use weights stored elsewhere
 # make sure the model weights are submitted with the other code files
 # any files in the logs folder are not necessary. Make sure to exclude the .zip extension here
 MODEL_WEIGHTS_RELATIVE_PATH = "./best_model"
+
 
 class Agent:
     def __init__(self, player: str, env_cfg: EnvConfig) -> None:
@@ -76,6 +81,9 @@ class Agent:
         # first convert observations using the same observation wrapper you used for training
         # note that SimpleUnitObservationWrapper takes input as the full observation for both players and returns an obs for players
         raw_obs = dict(player_0=obs, player_1=obs)
+
+        test_obs = SimpleMutiDimObsSpace.convert_obs(obs, env_cfg=self.env_cfg)
+
         obs = SimpleUnitObservationWrapper.convert_obs(raw_obs, env_cfg=self.env_cfg)
         obs = obs[self.player]
 
@@ -89,15 +97,19 @@ class Agent:
                 .unsqueeze(0)
                 .bool()
             )
-            
+
             # SB3 doesn't support invalid action masking. So we do it ourselves here
             features = self.policy.policy.features_extractor(obs.unsqueeze(0))
-            x = self.policy.policy.mlp_extractor.shared_net(features)
-            logits = self.policy.policy.action_net(x) # shape (1, N) where N=12 for the default controller
+            test_features = self.policy.policy.features_extractor(test_obs.unsqueeze(0))
 
-            logits[~action_mask] = -1e8 # mask out invalid actions
+            x = self.policy.policy.mlp_extractor.shared_net(features)
+            logits = self.policy.policy.action_net(
+                x
+            )  # shape (1, N) where N=12 for the default controller
+
+            logits[~action_mask] = -1e8  # mask out invalid actions
             dist = th.distributions.Categorical(logits=logits)
-            actions = dist.sample().cpu().numpy() # shape (1, 1)
+            actions = dist.sample().cpu().numpy()  # shape (1, 1)
 
         # use our controller which we trained with in train.py to generate a Lux S2 compatible action
         lux_action = self.controller.action_to_lux_action(

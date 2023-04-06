@@ -74,6 +74,11 @@ class Bot:
                 observations = Namespace(**observations)
                 observations.obs = json.dumps(observations.obs)
                 action = self.proc.agent_fn(observations, dict(env_cfg=env_cfg))
+
+                if isinstance(action, str):
+                    if "Backend MacOSX" in action:
+                        action = None
+
             else:
                 data = json.dumps(observations)
                 action, stderr = await asyncio.wait_for(

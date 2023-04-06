@@ -29,8 +29,12 @@ from stable_baselines3.common.vec_env import (
     VecVideoRecorder,
 )
 from stable_baselines3.ppo import PPO
+from wrappers.obs_wrappers import SimpleMutiDimObsSpace
 
-from wrappers import SimpleUnitDiscreteController, SimpleUnitObservationWrapper
+from wrappers import (
+    SimpleUnitDiscreteController,
+    SimpleUnitObservationWrapper,
+)
 
 
 class CustomEnvWrapper(gym.Wrapper):
@@ -55,11 +59,13 @@ class CustomEnvWrapper(gym.Wrapper):
         # and save single-agent versions of the data below
         action = {agent: action}
         obs, _, done, info = self.env.step(action)
-        obs = obs[agent]
+        # print(obs)
+        # obs = obs[agent]
         done = done[agent]
 
         # we collect stats on teams here. These are useful stats that can be used to help generate reward functions
         stats: StatsStateDict = self.env.state.stats[agent]
+        print(stats)
 
         info = dict()
         metrics = dict()
@@ -73,6 +79,9 @@ class CustomEnvWrapper(gym.Wrapper):
         # power to do so and succeed (less frequent updates = more power is saved)
         metrics["action_queue_updates_success"] = stats["action_queue_updates_success"]
         metrics["action_queue_updates_total"] = stats["action_queue_updates_total"]
+
+        metrics["light_robots_built"] = stats["generation"]["built"]["LIGHT"]
+        metrics["heavy_robots_built"] = stats["generation"]["built"]["HEAVY"]
 
         # we can save the metrics to info so we can use tensorboard to log them to get a glimpse into how our agent is behaving
         info["metrics"] = metrics
@@ -92,14 +101,14 @@ class CustomEnvWrapper(gym.Wrapper):
             reward = (
                 ice_dug_this_step / 100
                 + water_produced_this_step
-                + lichen_grown_this_step
+                + lichen_grown_this_step / 1000
             )
 
         self.prev_step_metrics = copy.deepcopy(metrics)
         return obs, reward, done, info
 
     def reset(self, **kwargs):
-        obs = self.env.reset(**kwargs)["player_0"]
+        obs = self.env.reset(**kwargs)
         self.prev_step_metrics = None
         return obs
 
@@ -166,9 +175,11 @@ def make_env(env_id: str, rank: int, seed: int = 0, max_episode_steps=100):
             factory_placement_policy=place_near_random_ice,
             controller=SimpleUnitDiscreteController(env.env_cfg),
         )
-        env = SimpleUnitObservationWrapper(
-            env
-        )  # changes observation to include a few simple features
+        # env = SimpleUnitObservationWrapper(
+        #     env
+        # )  # changes observation to include a few simple features
+        env = SimpleMutiDimObsSpace(env)
+
         env = CustomEnvWrapper(env)  # convert to single agent, add our reward
         env = TimeLimit(
             env, max_episode_steps=max_episode_steps
@@ -258,8 +269,23 @@ def main(args):
     env.reset()
     rollout_steps = 4000
     policy_kwargs = dict(net_arch=(128, 128))
-    model = PPO(
-        "MlpPolicy",
+    # model = PPO(
+    #     "MlpPolicy",
+    #     env,
+    #     n_steps=rollout_steps // args.n_envs,
+    #     batch_size=800,
+    #     learning_rate=3e-4,
+    #     policy_kwargs=policy_kwargs,
+    #     verbose=1,
+    #     n_epochs=2,
+    #     target_kl=0.05,
+    #     gamma=0.99,
+    #     device="cpu",
+    #     tensorboard_log=osp.join(args.log_path),
+    # )
+
+    test_flatten_model = PPO(
+        "MultiInputPolicy",
         env,
         n_steps=rollout_steps // args.n_envs,
         batch_size=800,
@@ -269,13 +295,15 @@ def main(args):
         n_epochs=2,
         target_kl=0.05,
         gamma=0.99,
-        device="cuda",
+        device="cpu",
         tensorboard_log=osp.join(args.log_path),
     )
+
     if args.eval:
         evaluate(args, env_id, model)
     else:
-        train(args, env_id, model)
+        # train(args, env_id, model)
+        train(args, env_id, test_flatten_model)
 
 
 if __name__ == "__main__":
