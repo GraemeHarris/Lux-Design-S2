@@ -65,7 +65,7 @@ class CustomEnvWrapper(gym.Wrapper):
 
         # we collect stats on teams here. These are useful stats that can be used to help generate reward functions
         stats: StatsStateDict = self.env.state.stats[agent]
-        print(stats)
+        # print(stats)
 
         info = dict()
         metrics = dict()
@@ -295,7 +295,7 @@ def main(args):
         n_epochs=2,
         target_kl=0.05,
         gamma=0.99,
-        device="cpu",
+        device="cuda",
         tensorboard_log=osp.join(args.log_path),
     )
 
